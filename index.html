@@ -1,0 +1,467 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronicle — the Bible in the order it happened</title>
+<style>
+  /* ---------- tokens: light (parchment / day) ---------- */
+  :root{
+    --bg:#F1E9D8; --surface:#FAF4E7; --surface-2:#F5EEDC;
+    --text:#211E18; --muted:#6E654F; --faint:#938974;
+    --line:#E2D7BF; --line-strong:#D3C4A2;
+    --accent:#A2761B;        /* aged gold */
+    --accent-soft:#C79A3E;
+    --psalm:#3A3E6B;         /* indigo for the woven-in psalm */
+    --psalm-soft:#5B5FA0;
+    --shadow:0 1px 2px rgba(40,32,10,.06), 0 8px 30px rgba(40,32,10,.08);
+    --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua','Georgia',serif;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  /* ---------- tokens: dark (night) — OS default, unless explicit light ---------- */
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#111328; --surface:#1A1D38; --surface-2:#212545;
+      --text:#ECE5D4; --muted:#A29EB6; --faint:#7C7994;
+      --line:#2A2E51; --line-strong:#373C63;
+      --accent:#D8AE5A; --accent-soft:#E7C583;
+      --psalm:#9FA1DA; --psalm-soft:#8385C6;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.4);
+    }
+  }
+  /* ---------- explicit dark toggle wins either way ---------- */
+  :root[data-theme="dark"]{
+    --bg:#111328; --surface:#1A1D38; --surface-2:#212545;
+    --text:#ECE5D4; --muted:#A29EB6; --faint:#7C7994;
+    --line:#2A2E51; --line-strong:#373C63;
+    --accent:#D8AE5A; --accent-soft:#E7C583;
+    --psalm:#9FA1DA; --psalm-soft:#8385C6;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    padding-bottom:96px; /* room for player */
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:0 20px}
+
+  /* ---------- app bar ---------- */
+  .appbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);
+    backdrop-filter:saturate(1.2) blur(10px);border-bottom:1px solid var(--line)}
+  .appbar-in{max-width:640px;margin:0 auto;padding:11px 16px;display:flex;align-items:center;gap:12px}
+  .brand{display:flex;flex-direction:column;line-height:1.05;margin-right:auto}
+  .brand b{font-family:var(--serif);font-weight:600;font-size:1.16rem;letter-spacing:.2px}
+  .brand small{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+  .iconbtn{appearance:none;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);
+    width:38px;height:38px;border-radius:11px;display:grid;place-items:center;cursor:pointer;font-size:1rem;
+    transition:transform .12s ease,background .12s ease}
+  .iconbtn:hover{background:var(--surface-2)}
+  .iconbtn:active{transform:scale(.94)}
+  .ref-btn{border:1px solid var(--line-strong);background:var(--surface);color:var(--text);height:38px;
+    padding:0 13px;border-radius:11px;cursor:pointer;font-family:var(--serif);font-size:.92rem;display:flex;
+    align-items:center;gap:7px}
+  .ref-btn .chev{color:var(--accent);font-size:.7rem}
+  .chip{font-family:var(--sans);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);
+    border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-radius:999px;padding:2px 7px;align-self:center}
+
+  /* ---------- reading ---------- */
+  main{padding-top:26px}
+  .section-head{margin:6px 0 20px}
+  .eyebrow{font-size:.64rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .section-head h1{font-family:var(--serif);font-weight:600;font-size:1.7rem;margin:.35rem 0 .2rem;text-wrap:balance}
+  .section-head p{color:var(--muted);font-size:.9rem;margin:0}
+
+  .reading{position:relative;padding-left:22px}
+  .reading::before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:2px;
+    background:linear-gradient(var(--line-strong),var(--line-strong));border-radius:2px}
+  .v{font-family:var(--serif);font-size:1.18rem;line-height:1.72;margin:0 0 .1rem;padding:6px 8px 6px 4px;
+    border-radius:8px;cursor:pointer;transition:background .18s ease,color .18s ease;color:var(--text);position:relative}
+  .v .n{font-family:var(--sans);font-size:.62rem;font-weight:700;color:var(--accent);vertical-align:super;
+    margin-right:6px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+  .v:hover{background:var(--surface-2)}
+  .v.reading-now{background:color-mix(in srgb,var(--accent) 15%,var(--surface));
+    box-shadow:inset 3px 0 0 var(--accent)}
+  .v.psalm{color:var(--text)}
+  .v.psalm .n{color:var(--psalm)}
+  .v.psalm.reading-now{background:color-mix(in srgb,var(--psalm) 16%,var(--surface));box-shadow:inset 3px 0 0 var(--psalm)}
+
+  /* woven-in marker */
+  .weave{margin:26px 0 20px;margin-left:-22px;position:relative}
+  .weave-card{background:var(--surface);border:1px solid var(--line-strong);border-left:3px solid var(--psalm);
+    border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .weave-card .tag{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--psalm);font-weight:700;
+    display:flex;align-items:center;gap:8px}
+  .weave-card h2{font-family:var(--serif);font-weight:600;font-size:1.28rem;margin:.4rem 0 .3rem}
+  .weave-card p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.5}
+  .weave-card .super{font-family:var(--serif);font-style:italic;color:var(--text);border-top:1px solid var(--line);
+    margin-top:12px;padding-top:11px;font-size:.92rem;line-height:1.5}
+
+  .continue{margin:30px 0 10px;padding:16px 0;border-top:1px solid var(--line);color:var(--muted);
+    font-family:var(--serif);font-size:1rem;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .continue button{appearance:none;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);
+    font-family:var(--sans);font-size:.82rem;padding:8px 13px;border-radius:10px;cursor:pointer}
+
+  /* ---------- player ---------- */
+  .player{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);
+    border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(0,0,0,.08)}
+  .prog{height:3px;background:var(--line);position:relative}
+  .prog i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);transition:width .3s linear}
+  .player-in{max-width:640px;margin:0 auto;padding:12px 18px 16px;display:flex;align-items:center;gap:14px}
+  .play{appearance:none;border:none;cursor:pointer;width:52px;height:52px;border-radius:50%;flex:0 0 auto;
+    background:var(--accent);color:#1c1400;display:grid;place-items:center;font-size:1.3rem;
+    box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 45%,transparent);transition:transform .12s ease}
+  :root[data-theme="dark"] .play,:root:not([data-theme="light"]) .play{color:#17131f}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .play{color:#17131f}}
+  .play:active{transform:scale(.93)}
+  .nowbox{flex:1 1 auto;min-width:0}
+  .nowbox .lab{font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  .nowbox .ref{font-family:var(--serif);font-size:1.02rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nowbox .ref em{color:var(--psalm);font-style:normal}
+  .rate{appearance:none;border:1px solid var(--line-strong);background:var(--bg);color:var(--muted);
+    font-family:var(--sans);font-size:.78rem;font-weight:600;padding:7px 10px;border-radius:9px;cursor:pointer;flex:0 0 auto}
+
+  /* ---------- ask FAB + sheet ---------- */
+  .fab{position:fixed;right:18px;bottom:104px;z-index:31;appearance:none;border:none;cursor:pointer;
+    background:var(--psalm);color:#fff;padding:12px 17px;border-radius:999px;font-family:var(--sans);
+    font-weight:600;font-size:.9rem;display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+  :root:not([data-theme="light"]) .fab,@media(prefers-color-scheme:dark){}
+  .fab:active{transform:scale(.95)}
+
+  .scrim{position:fixed;inset:0;z-index:40;background:rgba(10,8,4,.42);opacity:0;pointer-events:none;transition:opacity .25s ease}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--surface);border-top-left-radius:22px;
+    border-top-right-radius:22px;border:1px solid var(--line);border-bottom:none;box-shadow:0 -10px 40px rgba(0,0,0,.28);
+    transform:translateY(102%);transition:transform .28s cubic-bezier(.2,.8,.2,1);max-height:82vh;overflow:auto}
+  .sheet.open{transform:translateY(0)}
+  .sheet-in{max-width:640px;margin:0 auto;padding:8px 20px 26px}
+  .grip{width:38px;height:4px;border-radius:4px;background:var(--line-strong);margin:10px auto 14px}
+  .sheet h3{font-family:var(--serif);font-weight:600;font-size:1.28rem;margin:0 0 3px}
+  .sheet .hint{color:var(--muted);font-size:.86rem;margin:0 0 16px}
+  .askrow{display:flex;gap:9px}
+  .askrow input{flex:1;border:1px solid var(--line-strong);background:var(--bg);color:var(--text);
+    border-radius:12px;padding:13px 14px;font-family:var(--serif);font-size:1rem}
+  .askrow input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .askrow button{appearance:none;border:none;background:var(--accent);color:#1c1400;font-weight:700;
+    border-radius:12px;padding:0 17px;cursor:pointer;font-size:.95rem}
+  .sugg{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+  .sugg button{appearance:none;border:1px solid var(--line-strong);background:var(--bg);color:var(--text);
+    border-radius:999px;padding:8px 13px;font-size:.82rem;cursor:pointer;font-family:var(--serif)}
+  .answer{margin-top:18px;border-top:1px solid var(--line);padding-top:16px;display:none}
+  .answer.show{display:block}
+  .answer .q{font-family:var(--serif);font-weight:600;font-size:1.02rem;margin:0 0 8px;color:var(--accent)}
+  .answer .a{font-family:var(--serif);font-size:1.04rem;line-height:1.62;margin:0;color:var(--text)}
+  .answer .a b{color:var(--text)}
+  .answer .cite{margin-top:10px;font-family:var(--sans);font-size:.74rem;color:var(--faint);letter-spacing:.02em}
+
+  /* jump sheet list */
+  .jump-list{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+  .jump-list button{appearance:none;border:none;background:transparent;color:var(--text);text-align:left;
+    padding:12px 12px;border-radius:10px;cursor:pointer;font-family:var(--serif);font-size:1rem;display:flex;
+    justify-content:space-between;align-items:center;gap:10px;border:1px solid transparent}
+  .jump-list button:hover{background:var(--surface-2)}
+  .jump-list button.here{border-color:var(--line-strong);background:var(--surface-2)}
+  .jump-list button small{font-family:var(--sans);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .jump-list button .woven{color:var(--psalm)}
+  .disabled-note{color:var(--faint);font-size:.78rem;margin:14px 2px 2px;font-style:italic}
+
+  .footnote{color:var(--faint);font-size:.72rem;text-align:center;margin:26px 0 6px;line-height:1.5}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="appbar">
+  <div class="appbar-in">
+    <div class="brand"><b>Chronicle</b><small>In the order it happened</small></div>
+    <button class="ref-btn" id="refBtn" aria-label="Jump to a passage">
+      <span id="refLabel">1 Samuel 19</span><span class="chev">▾</span>
+    </button>
+    <button class="iconbtn" id="themeBtn" aria-label="Toggle day / night">☾</button>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="section-head">
+    <div class="eyebrow">The life of David · c. 1015 BC</div>
+    <h1>The night Saul’s men watched the house</h1>
+    <p>1 Samuel 19 · World English Bible <span class="chip" style="margin-left:6px">Preview</span></p>
+  </div>
+  <div class="reading" id="reading"></div>
+
+  <div class="continue">
+    <span>The story continues…</span>
+    <button>1 Samuel 20 →</button>
+  </div>
+  <p class="footnote">Prototype · public-domain text shown. The full app carries your NASB &amp; ESV,
+    real narration, and answers any question live.</p>
+</main>
+
+<button class="fab" id="askBtn" aria-label="Ask a question">✦ Ask</button>
+
+<div class="player">
+  <div class="prog"><i id="progBar"></i></div>
+  <div class="player-in">
+    <button class="play" id="playBtn" aria-label="Play audio">▶</button>
+    <div class="nowbox">
+      <div class="lab">Now reading</div>
+      <div class="ref" id="nowRef">Tap play to listen</div>
+    </div>
+    <button class="rate" id="rateBtn" aria-label="Reading speed">1.0×</button>
+  </div>
+</div>
+
+<!-- Ask sheet -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="askSheet" role="dialog" aria-label="Ask a question">
+  <div class="sheet-in">
+    <div class="grip"></div>
+    <h3>Ask Chronicle</h3>
+    <p class="hint">Ask anything about what you’re reading — people, places, timelines, meaning.</p>
+    <div class="askrow">
+      <input id="askInput" placeholder="e.g. What is the lineage of Isaac?" />
+      <button id="askSend">Ask</button>
+    </div>
+    <div class="sugg" id="sugg"></div>
+    <div class="answer" id="answer">
+      <p class="q" id="ansQ"></p>
+      <p class="a" id="ansA"></p>
+      <div class="cite" id="ansCite"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Jump sheet -->
+<div class="scrim" id="scrim2"></div>
+<div class="sheet" id="jumpSheet" role="dialog" aria-label="Jump to a passage">
+  <div class="sheet-in">
+    <div class="grip"></div>
+    <h3>Jump to</h3>
+    <p class="hint">This chronological chapter — David’s flight from Saul.</p>
+    <div class="jump-list" id="jumpList"></div>
+    <p class="disabled-note">In the full app: every book, chapter, and verse — laid out on one chronological timeline.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  // ---------- content ----------
+  var narr = [
+    [11,"Saul sent messengers to David’s house, to watch him, and to kill him in the morning. Michal, David’s wife, told him, saying, “If you don’t save your life tonight, tomorrow you will be killed.”"],
+    [12,"So Michal let David down through the window. He went away, fled, and escaped."],
+    [13,"Michal took the teraphim, and laid it in the bed, and put a pillow of goats’ hair at its head, and covered it with clothes."],
+    [14,"When Saul sent messengers to take David, she said, “He is sick.”"],
+    [15,"Saul sent the messengers to see David, saying, “Bring him up to me in the bed, that I may kill him.”"],
+    [16,"When the messengers came in, behold, the teraphim was in the bed, with the pillow of goats’ hair at its head."],
+    [17,"Saul said to Michal, “Why have you deceived me so, and let my enemy go, so that he is escaped?” Michal answered Saul, “He said to me, ‘Let me go! Why should I kill you?’”"],
+    [18,"Now David fled and escaped, and came to Samuel at Ramah, and told him all that Saul had done to him. He and Samuel went and lived in Naioth."]
+  ];
+  var psalm = [
+    [1,"Deliver me from my enemies, my God. Set me on high from those who rise up against me."],
+    [2,"Deliver me from the workers of iniquity. Save me from the bloodthirsty men."],
+    [3,"For, behold, they lie in wait for my soul. The mighty gather themselves together against me, not for my disobedience, nor for my sin, Yahweh."],
+    [4,"I have done no wrong, yet they are ready to attack me. Rise up, behold, and help me!"],
+    [5,"You, Yahweh God of Armies, the God of Israel, rouse yourself to punish the nations. Show no mercy to the wicked traitors. Selah."],
+    [6,"They return at evening, howling like dogs, and prowl around the city."],
+    [7,"Behold, they spew with their mouth. Swords are in their lips, “For,” they say, “who hears us?”"],
+    [8,"But you, Yahweh, laugh at them. You scoff at all the nations."],
+    [9,"Oh, my Strength, I watch for you, for God is my high tower."],
+    [10,"My God will go before me with his loving kindness. God will let me look at my enemies in triumph."],
+    [11,"Don’t kill them, or my people may forget. Scatter them by your power, and bring them down, Lord our shield."],
+    [12,"For the sin of their mouth, and the words of their lips, let them be caught in their pride, for the curses and lies which they utter."],
+    [13,"Consume them in wrath. Consume them, and they will be no more. Let them know that God rules in Jacob, to the ends of the earth. Selah."],
+    [14,"At evening let them return. Let them howl like a dog, and go around the city."],
+    [15,"They shall wander up and down for food, and wait all night if they aren’t satisfied."],
+    [16,"But I will sing of your strength. Yes, I will sing aloud of your loving kindness in the morning. For you have been my high tower, a refuge in the day of my distress."],
+    [17,"To you, my strength, I will sing praises. For God is my high tower, the God of my mercy."]
+  ];
+
+  // ---------- build reading + play queue ----------
+  var reading = document.getElementById('reading');
+  var queue = []; // {text, ref, el}
+  function verseEl(num, text, cls, refLabel){
+    var p = document.createElement('p');
+    p.className = 'v' + (cls? ' '+cls : '');
+    p.innerHTML = '<span class="n">'+num+'</span>'+text;
+    reading.appendChild(p);
+    var i = queue.length;
+    queue.push({text:text, ref:refLabel, el:p, psalm: cls==='psalm'});
+    p.addEventListener('click', function(){ setIndex(i, true); });
+    return p;
+  }
+  narr.forEach(function(r){ verseEl(r[0], r[1], '', '1 Samuel 19:'+r[0]); });
+
+  // woven-in card
+  var weave = document.createElement('div');
+  weave.className = 'weave';
+  weave.innerHTML =
+    '<div class="weave-card">'+
+      '<div class="tag">✦ Woven in — written here</div>'+
+      '<h2>Psalm 59</h2>'+
+      '<p>David wrote this that same night. In your Bible it sits hundreds of pages away in the book of Psalms — here, it belongs to the moment he lived it.</p>'+
+      '<div class="super">“…when Saul sent men, and they watched the house to kill him.” <span style="color:var(--faint)">— the psalm’s own heading</span></div>'+
+    '</div>';
+  reading.appendChild(weave);
+
+  psalm.forEach(function(r){ verseEl(r[0], r[1], 'psalm', 'Psalm 59:'+r[0]); });
+
+  // ---------- audio (browser speech) ----------
+  var synth = window.speechSynthesis;
+  var supported = !!synth;
+  var idx = 0, playing = false, rate = 1.0;
+  var rates = [1.0, 1.25, 1.5, 0.85];
+  var playBtn = document.getElementById('playBtn');
+  var nowRef = document.getElementById('nowRef');
+  var progBar = document.getElementById('progBar');
+  var rateBtn = document.getElementById('rateBtn');
+
+  function paint(){
+    queue.forEach(function(q,i){ q.el.classList.toggle('reading-now', i===idx && playing); });
+    var q = queue[idx];
+    if(q){
+      nowRef.innerHTML = q.psalm ? '<em>'+q.ref+'</em>' : q.ref;
+    }
+    progBar.style.width = ((idx)/(queue.length-1)*100).toFixed(1)+'%';
+  }
+  function scrollTo(i){
+    var el = queue[i] && queue[i].el;
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  function speakFrom(i){
+    if(!supported){ return; }
+    if(i >= queue.length){ stop(true); return; }
+    idx = i; paint(); scrollTo(i);
+    var u = new SpeechSynthesisUtterance(queue[i].text.replace(/[“”]/g,'"').replace(/[‘’]/g,"'"));
+    u.rate = rate; u.pitch = 1;
+    if(voice) u.voice = voice;
+    u.onend = function(){ if(playing) speakFrom(idx+1); };
+    synth.speak(u);
+  }
+  function play(){
+    if(!supported){ nowRef.textContent = 'Audio preview needs a browser voice — try Safari or Chrome.'; return; }
+    playing = true; playBtn.textContent = '❚❚'; playBtn.setAttribute('aria-label','Pause audio');
+    synth.cancel(); speakFrom(idx);
+  }
+  function pause(){
+    playing = false; playBtn.textContent = '▶'; playBtn.setAttribute('aria-label','Play audio');
+    if(supported) synth.cancel(); paint();
+  }
+  function stop(done){
+    playing = false; playBtn.textContent = '▶';
+    if(supported) synth.cancel();
+    if(done){ idx = 0; }
+    paint();
+  }
+  function setIndex(i, fromTap){
+    idx = i; paint();
+    if(fromTap){ scrollTo(i); if(playing){ synth.cancel(); speakFrom(i); } }
+  }
+  playBtn.addEventListener('click', function(){ playing ? pause() : play(); });
+  rateBtn.addEventListener('click', function(){
+    var k = (rates.indexOf(rate)+1)%rates.length; rate = rates[k];
+    rateBtn.textContent = rate.toFixed(rate===1?1:2).replace(/0$/,'')+'×';
+    if(playing){ synth.cancel(); speakFrom(idx); }
+  });
+  // voice selection
+  var voice = null;
+  function pickVoice(){
+    if(!supported) return;
+    var vs = synth.getVoices()||[];
+    voice = vs.filter(function(v){return /en(-|_)?/i.test(v.lang);})
+              .sort(function(a,b){return (b.default?1:0)-(a.default?1:0);})[0] || vs[0] || null;
+  }
+  if(supported){ pickVoice(); synth.onvoiceschanged = pickVoice; }
+  paint();
+
+  // ---------- theme toggle ----------
+  var themeBtn = document.getElementById('themeBtn');
+  function currentDark(){
+    var t = document.documentElement.getAttribute('data-theme');
+    if(t==='dark') return true; if(t==='light') return false;
+    return window.matchMedia('(prefers-color-scheme:dark)').matches;
+  }
+  function syncThemeIcon(){ themeBtn.textContent = currentDark() ? '☀' : '☾'; }
+  themeBtn.addEventListener('click', function(){
+    document.documentElement.setAttribute('data-theme', currentDark() ? 'light' : 'dark');
+    syncThemeIcon();
+  });
+  syncThemeIcon();
+
+  // ---------- sheets ----------
+  function openSheet(sheet, scrim){ scrim.classList.add('open'); sheet.classList.add('open'); }
+  function closeSheets(){
+    document.querySelectorAll('.sheet').forEach(function(s){s.classList.remove('open');});
+    document.querySelectorAll('.scrim').forEach(function(s){s.classList.remove('open');});
+  }
+  document.getElementById('scrim').addEventListener('click', closeSheets);
+  document.getElementById('scrim2').addEventListener('click', closeSheets);
+
+  // Ask
+  var answers = {
+    isaac:{q:"What is the lineage of Isaac?",
+      a:"Isaac was the son of <b>Abraham and Sarah</b> — the child of the promise. He married <b>Rebekah</b>, and they had twin sons, <b>Esau and Jacob</b>. Jacob, later renamed <b>Israel</b>, fathered the twelve sons who became the twelve tribes. So the covenant line runs: <b>Abraham → Isaac → Jacob (Israel) → the twelve tribes</b> — the family the rest of the Old Testament follows.",
+      cite:"Genesis 21, 24–25 · 35:10"},
+    psalm59:{q:"Why is Psalm 59 here?",
+      a:"Because David wrote it during <b>this exact night</b>. The psalm’s own heading says it was written “when Saul sent men, and they watched the house to kill him” — the events you just read in <b>1 Samuel 19:11</b>. Chronicle places it where he lived it instead of a thousand pages later in the book of Psalms.",
+      cite:"1 Samuel 19:11 · Psalm 59 (title)"},
+    michal:{q:"Who was Michal?",
+      a:"<b>Michal</b> was King Saul’s daughter and David’s first wife. She loved David and risked Saul’s wrath to save him — lowering him through a window and covering for him with an idol in the bed. Her story threads through David’s rise and later grows strained.",
+      cite:"1 Samuel 18:20 · 19:11–17"}
+  };
+  var suggWrap = document.getElementById('sugg');
+  [['What is the lineage of Isaac?','isaac'],['Why is Psalm 59 here?','psalm59'],['Who was Michal?','michal']]
+    .forEach(function(s){
+      var b=document.createElement('button'); b.textContent=s[0];
+      b.addEventListener('click', function(){ showAnswer(s[1]); }); suggWrap.appendChild(b);
+    });
+  var answerBox=document.getElementById('answer');
+  function showAnswer(key){
+    var data = answers[key];
+    document.getElementById('ansQ').textContent = data ? data.q : document.getElementById('askInput').value;
+    if(data){
+      document.getElementById('ansA').innerHTML = data.a;
+      document.getElementById('ansCite').textContent = data.cite;
+    } else {
+      document.getElementById('ansA').innerHTML = "Great question. In the full app I answer live, straight from Scripture with citations — this preview has a few sample answers ready. Try one of the suggestions above to see the idea.";
+      document.getElementById('ansCite').textContent = "Preview";
+    }
+    answerBox.classList.add('show');
+    answerBox.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+  function resolveAsk(text){
+    var t=(text||'').toLowerCase();
+    if(/isaac|lineage|genealog/.test(t)) return 'isaac';
+    if(/psalm|59|why.*here|woven/.test(t)) return 'psalm59';
+    if(/michal|wife|window/.test(t)) return 'michal';
+    return null;
+  }
+  document.getElementById('askBtn').addEventListener('click', function(){ openSheet(document.getElementById('askSheet'), document.getElementById('scrim')); setTimeout(function(){document.getElementById('askInput').focus();},300); });
+  document.getElementById('askSend').addEventListener('click', function(){ showAnswer(resolveAsk(document.getElementById('askInput').value)); });
+  document.getElementById('askInput').addEventListener('keydown', function(e){ if(e.key==='Enter') showAnswer(resolveAsk(this.value)); });
+
+  // Jump
+  var jumpList=document.getElementById('jumpList');
+  function jumpBtn(label, sub, i, woven){
+    var b=document.createElement('button'); if(woven) b.classList.add('here');
+    b.innerHTML='<span'+(woven?' class="woven"':'')+'>'+label+'</span><small>'+sub+'</small>';
+    b.addEventListener('click', function(){ closeSheets(); setIndex(i, true); });
+    jumpList.appendChild(b);
+  }
+  jumpBtn('1 Samuel 19:11','The house is watched',0,false);
+  jumpBtn('1 Samuel 19:12','David escapes',1,false);
+  jumpBtn('Psalm 59:1','✦ Woven in — the prayer', narr.length, true);
+  jumpBtn('Psalm 59:16','“…I will sing in the morning”', narr.length+15, true);
+  document.getElementById('refBtn').addEventListener('click', function(){ openSheet(document.getElementById('jumpSheet'), document.getElementById('scrim2')); });
+
+  // update top ref label as you scroll
+  var refLabel=document.getElementById('refLabel');
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){
+      var q=queue[+e.target.dataset.i]; if(q){ refLabel.textContent = q.ref.split(':')[0]; }
+    }});
+  },{rootMargin:'-45% 0px -45% 0px'});
+  queue.forEach(function(q,i){ q.el.dataset.i=i; io.observe(q.el); });
+
+  window.addEventListener('beforeunload', function(){ if(supported) synth.cancel(); });
+})();
+</script>
